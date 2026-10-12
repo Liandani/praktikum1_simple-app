@@ -1,49 +1,29 @@
 pipeline {
-    agent any
-    environment {
-        IMAGE_NAME = 'abdieeuh/simple-app'
-        REGISTRY = 'https://index.docker.io/v1/'
-        REGISTRY_CREDENTIALS = 'dockerhub-credentials'
-        PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        DOCKER_HOST = "unix:///var/run/docker.sock"
+  agent any
+  environment {
+    IMAGE_NAME = 'youruser/simple-app'
+    REGISTRY = 'https://index.docker.io/v1/'
+    REGISTRY_CREDENTIALS = 'dockerhub-credentials'
+  }
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Build') {
+      steps { sh 'echo "Mulai build aplikasi"' }
     }
-    stages {
-        stage('Checkout') {
-            steps {
-                echo 'Melakukan checkout dari SCM...'
-                checkout scm
-            }
-        }
-        stage('Build') {
-            steps {
-                echo 'Mulai build aplikasi'
-                sh 'echo "Build selesai ✅"'
-            }
-        }
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    echo 'Membangun Docker image...'
-                    docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}")
-                    echo "Image berhasil dibuat: ${IMAGE_NAME}:${env.BUILD_NUMBER}"
-                }
-            }
-        }
-        stage('Push Docker Image') {
-            steps {
-                script {
-                    echo 'Push image ke Docker Hub...'
-                    docker.withRegistry(REGISTRY, REGISTRY_CREDENTIALS) {
-                        docker.image("${IMAGE_NAME}:${env.BUILD_NUMBER}").push()
-                        docker.image("${IMAGE_NAME}:${env.BUILD_NUMBER}").push('latest')
-                    }
-                }
-            }
-        }
+    stage('Build Docker Image') {
+      steps { script { docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}") } }
     }
-    post {
-        always {
-            echo 'Selesai build 🏁OYYY'
+    stage('Push Docker Image') {
+      steps {
+        script {
+          docker.withRegistry(REGISTRY, REGISTRY_CREDENTIALS) {
+            def tag = "${IMAGE_NAME}:${env.BUILD_NUMBER}"
+            docker.image(tag).push()
+            docker.image(tag).push('latest')
+          }
         }
+      }
     }
+  }
+  post { always { echo 'Selesai build' } }
 }
