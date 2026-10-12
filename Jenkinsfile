@@ -1,8 +1,8 @@
-
 pipeline {
     agent any
 
     environment {
+        PATH = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         IMAGE_NAME = 'liandani/simple-app'
         REGISTRY_CREDENTIALS = 'dockerhub-credentials'
     }
@@ -17,6 +17,7 @@ pipeline {
         stage('Check Docker') {
             steps {
                 sh '''
+                    which docker
                     docker --version
                     docker info
                 '''
@@ -32,14 +33,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                    test -f Dockerfile || {
-                        echo "ERROR: Dockerfile tidak ditemukan di root repository"
-                        exit 1
-                    }
-
-                    docker build \
-                      -t ${IMAGE_NAME}:${BUILD_NUMBER} \
-                      .
+                    test -f Dockerfile
+                    docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
                 '''
             }
         }
@@ -48,7 +43,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: "${REGISTRY_CREDENTIALS}",
+                        credentialsId: 'dockerhub-credentials',
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )
@@ -56,13 +51,12 @@ pipeline {
                     sh '''
                         set +x
                         echo "$DOCKER_PASS" | docker login \
-                          --username "$DOCKER_USER" \
-                          --password-stdin
+                            --username "$DOCKER_USER" \
+                            --password-stdin
 
                         docker push ${IMAGE_NAME}:${BUILD_NUMBER}
                         docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${IMAGE_NAME}:latest
                         docker push ${IMAGE_NAME}:latest
-
                         docker logout
                     '''
                 }
