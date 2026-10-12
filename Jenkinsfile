@@ -1,29 +1,78 @@
+
 pipeline {
-  agent any
-  environment {
-    IMAGE_NAME = 'liandani/simple-app'
-    REGISTRY = 'https://index.docker.io/v1/'
-    REGISTRY_CREDENTIALS = 'dockerhub-credentials'
-  }
-  stages {
-    stage('Checkout') { steps { checkout scm } }
-    stage('Build') {
-      steps { sh 'echo "Mulai build aplikasi"' }
+    agent any
+
+    environment {
+        IMAGE_NAME = 'liandani/simple-app'
+        REGISTRY_CREDENTIALS = 'dockerhub-credentials'
     }
-    stage('Build Docker Image') {
-      steps { script { docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}") } }
-    }
-    stage('Push Docker Image') {
-      steps {
-        script {
-          docker.withRegistry(REGISTRY, REGISTRY_CREDENTIALS) {
-            def tag = "${IMAGE_NAME}:${env.BUILD_NUMBER}"
-            docker.image(tag).push()
-            docker.image(tag).push('latest')
-          }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
+
+        stage('Check Docker') {
+            steps {
+                sh '''
+                    docker --version
+                    docker info
+                '''
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'echo "Mulai build aplikasi"'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    test -f Dockerfile || {
+                        echo "ERROR: Dockerfile tidak ditemukan di root repository"
+                        exit 1
+                    }
+
+                    docker build \
+                      -t ${IMAGE_NAME}:${BUILD_NUMBER} \
+                      .
+                '''
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: "${REGISTRY_CREDENTIALS}",
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        echo "$DOCKER_PASS" | docker login \
+                          --username "$DOCKER_USER" \
+                          --password-stdin
+
+                        docker push ${IMAGE_NAME}:${BUILD_NUMBER}
+                        docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${IMAGE_NAME}:latest
+                        docker push ${IMAGE_NAME}:latest
+
+                        docker logout
+                    '''
+                }
+            }
+        }
     }
-  }
-  post { always { echo 'Selesai build' } }
+
+    post {
+        always {
+            echo 'Selesai build'
+        }
+    }
 }
